@@ -1,133 +1,179 @@
 import numpy as np
 import sympy as sp
 from scipy.special import lambertw
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Dict, Callable
 import math
-import decimal
-from decimal import Decimal, getcontext
-
-# Set precision for extremely large numbers
-getcontext().prec = 1000000  # Increased precision
-MAX_NUMBER = Decimal(10) ** (Decimal(10) ** Decimal(100))  # Maximum number size (10^10^100)
+import mpmath
+from mpmath import mp
+from functools import lru_cache
 
 class CalculatorCore:
     def __init__(self):
         self.x = sp.Symbol('x')
         self.memory = 0
+        self.precision = 50  # Default precision
+        mp.dps = self.precision
+        mp.pretty = True
+        self._setup_math_dict()
         
-    def format_large_number(self, num: float) -> str:
-        """Formats large numbers in scientific notation or tetration notation."""
+    def set_precision(self, digits: int) -> None:
+        """Set the precision for calculations."""
+        self.precision = max(10, min(1000000, digits))  # Limit between 10 and 1M digits
+        mp.dps = self.precision
+        self._setup_math_dict()  # Refresh math dictionary with new precision
+        
+    def _is_simple_calculation(self, expression: str) -> bool:
+        """Check if this is a simple calculation that can use standard float."""
+        simple_ops = {'+', '-', '*', '/', '**', '^', '(', ')', '.', 'e'}
+        return all(c.isdigit() or c.isspace() or c in simple_ops for c in expression)
+        
+    def _setup_math_dict(self) -> None:
+        """Initialize math dictionary once for better performance."""
+        self.safe_dict: Dict[str, Callable] = {
+            "sin": lambda x: float(mp.sin(x)) if abs(float(x)) < 1000 else mp.sin(x),
+            "cos": lambda x: float(mp.cos(x)) if abs(float(x)) < 1000 else mp.cos(x),
+            "tan": lambda x: float(mp.tan(x)) if abs(float(x)) < 1000 else mp.tan(x),
+            "asin": lambda x: float(mp.asin(x)) if abs(float(x)) <= 1 else mp.asin(x),
+            "acos": lambda x: float(mp.acos(x)) if abs(float(x)) <= 1 else mp.acos(x),
+            "atan": lambda x: float(mp.atan(x)) if abs(float(x)) < 1000 else mp.atan(x),
+            "sinh": lambda x: float(mp.sinh(x)) if abs(float(x)) < 10 else mp.sinh(x),
+            "cosh": lambda x: float(mp.cosh(x)) if abs(float(x)) < 10 else mp.cosh(x),
+            "tanh": lambda x: float(mp.tanh(x)) if abs(float(x)) < 10 else mp.tanh(x),
+            "exp": lambda x: float(mp.exp(x)) if abs(float(x)) < 100 else mp.exp(x),
+            "log": lambda x: float(mp.log10(x)) if 0 < float(x) < 1e100 else mp.log10(x),
+            "ln": lambda x: float(mp.log(x)) if 0 < float(x) < 1e100 else mp.log(x),
+            "loga": lambda a, b: float(mp.log(b) / mp.log(a)) if 0 < float(b) < 1e100 and float(a) > 0 else mp.log(b) / mp.log(a),
+            "sqrt": lambda x: float(mp.sqrt(x)) if float(x) >= 0 and float(x) < 1e100 else mp.sqrt(x),
+            "pi": mp.pi,
+            "e": mp.e,
+            "abs": abs,
+            "factorial": self._safe_factorial,
+            "W": lambda x: float(lambertw(float(x), 0).real),
+            "tetration": self._cached_tetration,
+            "power": self._safe_power
+        }
+        
+    @staticmethod
+    def _safe_factorial(x: Union[int, float]) -> Union[float, str]:
+        """Optimized factorial with size limit."""
         try:
-            # Handle infinity
-            if math.isinf(num):
-                return "Infinity" if num > 0 else "-Infinity"
-                
-            # Convert to Decimal for higher precision
-            num_decimal = Decimal(str(num))
-            
-            # Check if number exceeds our maximum
-            if abs(num_decimal) > MAX_NUMBER:
-                return "Overflow Error: Number too large"
-            
-            # Convert to string first to check number of digits
-            num_str = f"{abs(num):.10f}".rstrip('0').rstrip('.')
-            num_digits = len(num_str.replace('.', ''))
-            
-            if num_digits > 10:  # Only format if more than 10 digits
-                exp = int(math.log10(abs(num)))
-                if exp > 1e6:  # Use tetration notation for extremely large numbers
-                    return f"10↑↑{int(math.log10(exp))}"
-                else:
-                    mantissa = num / (10 ** exp)
-                    return f"{mantissa:.6f}e{exp}"
-            
-            # For smaller numbers, return with appropriate decimal places
-            if isinstance(num, int):
-                return str(num)
-            else:
-                # Remove trailing zeros after decimal point
-                return f"{num:.10f}".rstrip('0').rstrip('.')
-                
-        except Exception:
-            return str(num)
-
-    def tetration(self, a: float, n: int) -> float:
-        """Computes tetration (iterated exponentiation)."""
-        try:
-            if n == 0:
-                return 1
+            n = int(x)
             if n < 0:
-                raise ValueError("Negative tetration height not supported")
-                
-            # Convert to Decimal for higher precision
-            a_decimal = Decimal(str(a))
-            result = a_decimal
+                return "Error: Factorial undefined for negative numbers"
+            if n > 1000:
+                return float('inf')
+            return mp.factorial(n)
+        except:
+            return "Error: Invalid input for factorial"
+    
+    @staticmethod
+    def _safe_power(x: Union[float, mp.mpf], y: Union[float, mp.mpf]) -> Union[float, mp.mpf]:
+        """Optimized power function with quick overflow checks."""
+        try:
+            if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+                abs_x, abs_y = abs(x), abs(y)
+                if abs_x > 10 and abs_y > 1000000:
+                    return float('inf')
+                if abs_x > 1000 and abs_y > 10000:
+                    return float('inf')
+            return mp.power(x, y)
+        except:
+            return float('inf')
+
+    @lru_cache(maxsize=1000)
+    def _cached_tetration(self, a: float, n: int) -> Union[float, str]:
+        """Cached tetration computation with optimizations."""
+        try:
+            # Quick checks for common values
+            if n == 0: return 1
+            if n == 1: return a
+            if n < 0: return "Error: Negative height"
+            if a == 0: return 0
+            if a == 1: return 1
+            
+            # Convert to mpmath for arbitrary precision
+            a = mp.mpf(str(a))
+            result = a
             
             for _ in range(n - 1):
-                # Check if next operation would exceed our maximum
-                if result > Decimal('1e1000000'):  # Higher intermediate limit
-                    log_result = result.ln()
-                    if log_result * Decimal(str(a)) > MAX_NUMBER.ln():
-                        return float('inf')
-                result = a_decimal ** result
+                # Use mpmath's power function for arbitrary precision
+                result = mp.power(a, result)
                 
-                # Check if result exceeds maximum
-                if result > MAX_NUMBER:
+                # Check if result is too large for representation
+                if mp.isnan(result) or mp.isinf(result):
                     return float('inf')
-                    
-            return float(result)
+                
+                # Check if we can still handle the next iteration
+                try:
+                    log_estimate = mp.log(result)
+                    if log_estimate > mp.mpf('1e100000'):  # Much higher limit
+                        return float('inf')
+                except:
+                    return float('inf')
+            
+            # Try to convert back to float if possible
+            try:
+                if result > mp.mpf('1e1000000'):
+                    return float('inf')
+                return float(result)
+            except:
+                return float('inf')
+                
         except Exception as e:
             return f"Error: {str(e)}"
 
-    def evaluate_expression(self, expression: str) -> Union[float, str]:
-        """Evaluates a mathematical expression."""
+    def format_large_number(self, num: Union[float, mp.mpf]) -> str:
+        """Optimized number formatting."""
         try:
-            # Replace scientific notation
-            expression = expression.replace("e", str(math.e))
+            if isinstance(num, float) and math.isinf(num):
+                return "Infinity" if num > 0 else "-Infinity"
             
-            # Handle tetration notation (↑↑)
+            if isinstance(num, (int, float)):
+                abs_num = abs(num)
+                if abs_num < 1e-10 and abs_num != 0:
+                    return f"{num:.2e}"
+                if abs_num > 1e10:
+                    exp = int(math.log10(abs_num))
+                    if exp > 1e6:
+                        return f"10↑↑{int(math.log10(exp))}"
+                    mantissa = num / (10 ** exp)
+                    return f"{mantissa:.6f}e{exp}"
+                return f"{num:.10g}".rstrip('0').rstrip('.')
+            
+            # mpmath number handling
+            return str(mp.nstr(num, 10)).rstrip('0').rstrip('.')
+                
+        except:
+            return str(num)
+
+    def evaluate_expression(self, expression: str) -> Union[mp.mpf, str]:
+        """Optimized expression evaluation."""
+        try:
+            # Handle tetration first
             if "↑↑" in expression:
                 parts = expression.split("↑↑")
-                if len(parts) == 2:
-                    base = float(self.evaluate_expression(parts[0]))
-                    height = int(float(self.evaluate_expression(parts[1])))
-                    return self.tetration(base, height)
+                if len(parts) != 2:
+                    return "Error: Invalid tetration format"
+                base = float(self.evaluate_expression(parts[0]))
+                height = int(float(self.evaluate_expression(parts[1])))
+                return self._cached_tetration(base, height)
             
-            # Create safe math environment with Decimal support
-            safe_dict = {
-                "sin": np.sin,
-                "cos": np.cos,
-                "tan": np.tan,
-                "asin": np.arcsin,
-                "acos": np.arccos,
-                "atan": np.arctan,
-                "sinh": np.sinh,
-                "cosh": np.cosh,
-                "tanh": np.tanh,
-                "exp": np.exp,
-                "log": lambda x: np.log10(x),  # log base 10
-                "ln": np.log,  # natural log
-                "loga": lambda a, b: np.log(b) / np.log(a),  # log base a of b
-                "sqrt": np.sqrt,
-                "pi": np.pi,
-                "e": np.e,
-                "abs": abs,
-                "factorial": math.factorial,
-                "W": lambda x: float(lambertw(x, 0).real),  # Lambert W function
-                "tetration": self.tetration,  # Add tetration function
-                "Decimal": Decimal  # Add Decimal support
-            }
+            # Quick replacements
+            expression = expression.replace("^", "**").replace("e", str(mp.e))
             
-            # Replace ^ with ** for exponentiation
-            expression = expression.replace("^", "**")
+            # For simple calculations, use standard float arithmetic
+            if self._is_simple_calculation(expression):
+                try:
+                    result = float(eval(expression, {"__builtins__": None}, 
+                                     {"e": math.e, "pi": math.pi}))
+                    return self.format_large_number(result)
+                except:
+                    pass  # Fall back to mpmath if float calculation fails
             
-            # Evaluate with safe environment
-            result = float(eval(expression, {"__builtins__": None}, safe_dict))
+            # Evaluate with cached math dictionary
+            result = eval(expression, {"__builtins__": None}, self.safe_dict)
+            return self.format_large_number(result)
             
-            # Format large numbers
-            if isinstance(result, (int, float, Decimal)):
-                return self.format_large_number(float(result))
-            return result
         except Exception as e:
             return f"Error: {str(e)}"
 

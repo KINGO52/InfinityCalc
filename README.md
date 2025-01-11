@@ -1,133 +1,92 @@
 # 🧮 InfinityCalc
 
-A powerful scientific calculator capable of handling astronomical numbers and advanced mathematical operations. From basic arithmetic to tetration, from graphing to calculus, InfinityCalc pushes the boundaries of numerical computation.
+A powerful scientific calculator with advanced mathematical capabilities and arbitrary precision arithmetic.
 
-## 🚀 Key Features
+## ✨ Features
 
-### 💫 Infinite Possibilities
-- Handle numbers up to 10^10^100
-- Tetration support (super-exponential growth)
-- Scientific notation with automatic scaling
-- Support for complex mathematical expressions
+### 🔢 Core Functions
+- Basic arithmetic operations
+- Scientific functions (trigonometry, logarithms)
+- Complex number operations
+- Matrix calculations
+- Arbitrary precision (up to 1,000,000 digits)
 
-### 📊 Advanced Graphing
-- Interactive function plotting with zoom and pan
-- Real-time coordinate tracking
-- Automatic function analysis
-- Derivative visualization
-- Common function templates
+### 📊 Graphing Capabilities
+- Interactive function plotting
+- Real-time coordinate display
+- Function analysis (derivatives, integrals)
+- Critical points and inflection points
+- Asymptote detection
 
-### 🧮 Scientific Functions
-- Complete trigonometric suite
-- Advanced logarithmic functions
+### 📐 Advanced Mathematics
+- Symbolic derivatives and integrals
 - Lambert W function
-- Matrix operations
-- Statistical calculations
+- Tetration (iterated exponentiation)
+- Large number support (up to 10^1000000)
+- Custom precision control
 
-### 📐 Calculus Tools
-- Symbolic derivatives
-- Indefinite integrals
-- Critical points detection
-- Inflection points
-- Asymptote analysis
+### 🧩 Special Features
+- Equation solver with step-by-step solutions
+- Systems of equations solver
+- Memory functions (M+, M-, MR, MC)
+- Scientific notation for large numbers
+- Customizable calculation precision
 
-### ⚡ Modern Interface
-- Dark mode by default
-- Intuitive tab-based design
-- Real-time calculations
-- Memory functions
-- Expression history
-
-## 🔧 Installation
+## 🚀 Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/KINGO52/InfinityCalc.git
+git clone https://github.com/yourusername/InfinityCalc.git
 cd InfinityCalc
 ```
 
-2. Run the setup script:
+2. Run setup:
 ```bash
-# On Windows
 setup.bat
-
-# On Linux/Mac
-# Coming soon
 ```
 
 3. Start the calculator:
 ```bash
-# On Windows
-run.bat
-
-# On Linux/Mac
-# Coming soon
+start.bat
 ```
 
 ## 💻 Requirements
 - Python 3.8 or higher
 - Dependencies (automatically installed):
-  - NumPy 1.21.0
-  - Matplotlib 3.4.0
-  - SymPy 1.8
-  - SciPy 1.7.0
-  - CustomTkinter 5.1.2
+  - numpy
+  - matplotlib
+  - sympy
+  - scipy
+  - customtkinter
 
 ## 🎯 Usage Examples
 
 ### Basic Operations
 ```python
-2 + 2 * 4         # Basic arithmetic
-2^3 or 2**3       # Exponentiation
-sqrt(16)          # Square root
+2 + 2 = 4
+sin(π/2) = 1
+log(100) = 2
 ```
 
 ### Advanced Functions
 ```python
-2↑↑3              # Tetration (2^2^2)
-W(x)              # Lambert W function
-loga(2,8)         # Log base 2 of 8
+W(1) = 0.567143290409783  # Lambert W function
+2↑↑3 = 16                 # Tetration
+loga(2,8) = 3            # Log base 2 of 8
 ```
 
-### Complex Expressions
+### Graphing
 ```python
-e^(x^2)           # Exponential function
-sin(x)/x          # Sinc function
-1/(1 + x^2)       # Rational function
+f(x) = e^((x^2+2)/sqrt(abs(x)))
+f(x) = x^5+x^3+9
+f(x) = 1/(x^2)
 ```
 
-### Large Numbers
-```python
-10^100            # Googol
-10↑↑3             # Power tower
-e^(e^10)          # Super-exponential
-```
-
-## 🛠️ Technical Details
-
-Built with cutting-edge Python technologies:
-- CustomTkinter for modern UI
-- Matplotlib for advanced plotting
-- SymPy for symbolic mathematics
-- NumPy and SciPy for numerical computations
-- Decimal for arbitrary-precision arithmetic
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to:
-- Report bugs
-- Suggest features
-- Submit pull requests
-- Improve documentation
+### Precision Control
+- Low (15 digits): Fast calculations
+- Medium (50 digits): Default precision
+- High (1000 digits): High precision
+- Custom: Up to 1,000,000 digits
 
 ## 📝 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 👤 Author
-
-**KINGO52**
-- GitHub: [@KINGO52](https://github.com/KINGO52)
-
----
-Made with 🔢 and ❤️ using Python 
+MIT License - feel free to use and modify! 
