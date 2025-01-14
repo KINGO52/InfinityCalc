@@ -17,6 +17,7 @@ A powerful scientific calculator with advanced mathematical capabilities and arb
 - Function analysis (derivatives, integrals)
 - Critical points and inflection points
 - Asymptote detection
+- note: if you want to know the point on the function its better to make plot it in a x close to it if you could provide a fix feel free to build it if you do give me credit for original code😉
 
 ### 📐 Advanced Mathematics
 - Symbolic derivatives and integrals
