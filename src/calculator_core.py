@@ -6,6 +6,7 @@ import math
 import mpmath
 from mpmath import mp
 from functools import lru_cache
+from sympy import pi, E
 
 class CalculatorCore:
     def __init__(self):
@@ -49,7 +50,7 @@ class CalculatorCore:
             "abs": abs,
             "factorial": self._safe_factorial,
             "W": lambda x: float(lambertw(float(x), 0).real),
-            "tetration": self._cached_tetration,
+            "tetration": self._compute_tetration,
             "power": self._safe_power
         }
         
@@ -81,44 +82,52 @@ class CalculatorCore:
             return float('inf')
 
     @lru_cache(maxsize=1000)
-    def _cached_tetration(self, a: float, n: int) -> Union[float, str]:
-        """Cached tetration computation with optimizations."""
+    def _compute_tetration(self, base: float, height: int) -> Union[float, str]:
+        """Compute tetration (a↑↑n) with dynamic precision based on size."""
         try:
             # Quick checks for common values
-            if n == 0: return 1
-            if n == 1: return a
-            if n < 0: return "Error: Negative height"
-            if a == 0: return 0
-            if a == 1: return 1
+            if height < 0:
+                return "Error: Negative height not allowed"
+            if height == 0:
+                return 1
+            if height == 1:
+                return base
+            if base == 0:
+                return 0
+            if base == 1:
+                return 1
             
-            # Convert to mpmath for arbitrary precision
-            a = mp.mpf(str(a))
-            result = a
-            
-            for _ in range(n - 1):
-                # Use mpmath's power function for arbitrary precision
-                result = mp.power(a, result)
-                
-                # Check if result is too large for representation
-                if mp.isnan(result) or mp.isinf(result):
-                    return float('inf')
-                
-                # Check if we can still handle the next iteration
-                try:
-                    log_estimate = mp.log(result)
-                    if log_estimate > mp.mpf('1e100000'):  # Much higher limit
-                        return float('inf')
-                except:
-                    return float('inf')
-            
-            # Try to convert back to float if possible
+            # Use logarithms for large numbers to prevent overflow
+            result = base
+            for i in range(height - 1):
+                if result > 1e10:
+                    # Switch to logarithmic calculation for very large numbers
+                    log_result = math.log(result)
+                    result = math.exp(log_result * base)
+                    
+                    # If the result is too large, return an approximation
+                    if result > 1e100:
+                        # Calculate number of digits in the result
+                        digits = int(log_result * base / math.log(10))
+                        if digits > 1e6:
+                            return float('inf')
+                        # Return approximation in scientific notation
+                        mantissa = base * math.log10(math.e) % 1
+                        return float(f"{math.pow(10, mantissa):.2f}e{digits}")
+                else:
+                    result = pow(base, result)
+            return result
+        except OverflowError:
+            # If overflow occurs, try logarithmic calculation
             try:
-                if result > mp.mpf('1e1000000'):
+                log_result = math.log(result)
+                digits = int(log_result * base / math.log(10))
+                if digits > 1e6:
                     return float('inf')
-                return float(result)
+                mantissa = base * math.log10(math.e) % 1
+                return float(f"{math.pow(10, mantissa):.2f}e{digits}")
             except:
                 return float('inf')
-                
         except Exception as e:
             return f"Error: {str(e)}"
 
@@ -151,6 +160,10 @@ class CalculatorCore:
         except:
             return str(num)
 
+    def normalize_expression(self, expression: str) -> str:
+        # Replace '^' with '**' for proper evaluation
+        return expression.replace('^', '**')
+
     def _normalize_expression(self, expr: str) -> str:
         """Normalize the expression by converting operators and handling special cases."""
         # Handle tetration first (must be done before ^ replacement)
@@ -162,53 +175,11 @@ class CalculatorCore:
             height = int(float(self.evaluate_expression(parts[1])))
             return str(self._compute_tetration(base, height))
         
-        # Replace ^ with ** for exponentiation
-        expr = expr.replace('^', '**')
+        # Replace '^' with '**' for exponentiation
+        expr = self.normalize_expression(expr)
         return expr
 
-    def _compute_tetration(self, base: float, height: int) -> float:
-        """Compute tetration (a↑↑n) with dynamic precision based on size."""
-        if height < 0:
-            raise ValueError("Tetration height must be non-negative")
-        if height == 0:
-            return 1
-        if height == 1:
-            return base
-        
-        # Use logarithms for large numbers to prevent overflow
-        try:
-            result = base
-            for i in range(height - 1):
-                if result > 1e10:
-                    # Switch to logarithmic calculation for very large numbers
-                    log_result = math.log(result)
-                    result = math.exp(log_result * base)
-                    
-                    # If the result is too large, return an approximation
-                    if result > 1e100:
-                        # Calculate number of digits in the result
-                        digits = int(log_result * base / math.log(10))
-                        if digits > 1e6:
-                            return float('inf')
-                        # Return approximation in scientific notation
-                        mantissa = base * math.log10(math.e) % 1
-                        return float(f"{math.pow(10, mantissa):.2f}e{digits}")
-                else:
-                    result = pow(base, result)
-            return result
-        except OverflowError:
-            # If overflow occurs, try logarithmic calculation
-            try:
-                log_result = math.log(result)
-                digits = int(log_result * base / math.log(10))
-                if digits > 1e6:
-                    return float('inf')
-                mantissa = base * math.log10(math.e) % 1
-                return float(f"{math.pow(10, mantissa):.2f}e{digits}")
-            except:
-                return float('inf')
-
-    def evaluate_expression(self, expression: str) -> float:
+    def evaluate_expression(self, expression: str) -> Union[float, str]:
         """Evaluates a mathematical expression."""
         try:
             # Normalize the expression first
@@ -219,12 +190,17 @@ class CalculatorCore:
             if expr == "-inf" or expr == "-Infinity":
                 return float('-inf')
             
-            return float(eval(expr, {"__builtins__": None},
-                            {"sin": np.sin, "cos": np.cos, "tan": np.tan,
-                             "exp": np.exp, "log": np.log10, "ln": np.log,
-                             "pi": np.pi, "e": np.e, "sqrt": np.sqrt,
-                             "W": lambda x: float(lambertw(x, 0).real),
-                             "loga": lambda a, b: np.log(b) / np.log(a)}))
+            # Create safe math dictionary
+            safe_dict = {
+                "sin": np.sin, "cos": np.cos, "tan": np.tan,
+                "exp": np.exp, "log": np.log10, "ln": np.log,
+                "pi": np.pi, "e": np.e, "sqrt": np.sqrt,
+                "W": lambda x: float(lambertw(x, 0).real),
+                "loga": lambda a, b: np.log(b) / np.log(a)
+            }
+            
+            result = eval(expr, {"__builtins__": None}, safe_dict)
+            return float(result)
         except Exception as e:
             return f"Error: {str(e)}"
 

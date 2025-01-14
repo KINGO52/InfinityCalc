@@ -4,6 +4,7 @@ from tkinter import ttk
 import numpy as np
 import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
+from sympy import pi, E
 from scipy.special import lambertw
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -51,4 +52,4 @@ class AdvancedCalculator(ctk.CTk):
 
 if __name__ == "__main__":
     app = AdvancedCalculator()
-    app.mainloop() 
+    app.mainloop()
