@@ -146,72 +146,60 @@ class CalculatorCore:
         except:
             return str(num)
 
-    def evaluate_expression(self, expression: str) -> Union[mp.mpf, str]:
-        """Optimized expression evaluation."""
+    def _normalize_expression(self, expr: str) -> str:
+        """Normalize the expression by converting ^ to ** and handling other syntax."""
+        # Replace ^ with ** for exponentiation
+        expr = expr.replace('^', '**')
+        return expr
+
+    def evaluate_expression(self, expression: str) -> float:
+        """Evaluates a mathematical expression."""
         try:
-            # Handle tetration first
-            if "↑↑" in expression:
-                parts = expression.split("↑↑")
-                if len(parts) != 2:
-                    return "Error: Invalid tetration format"
-                base = float(self.evaluate_expression(parts[0]))
-                height = int(float(self.evaluate_expression(parts[1])))
-                return self._cached_tetration(base, height)
-            
-            # Quick replacements
-            expression = expression.replace("^", "**").replace("e", str(mp.e))
-            
-            # For simple calculations, use standard float arithmetic
-            if self._is_simple_calculation(expression):
-                try:
-                    result = float(eval(expression, {"__builtins__": None}, 
-                                     {"e": math.e, "pi": math.pi}))
-                    return self.format_large_number(result)
-                except:
-                    pass  # Fall back to mpmath if float calculation fails
-            
-            # Evaluate with cached math dictionary
-            result = eval(expression, {"__builtins__": None}, self.safe_dict)
-            return self.format_large_number(result)
-            
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
+            return float(eval(expr, {"__builtins__": None},
+                            {"sin": np.sin, "cos": np.cos, "tan": np.tan,
+                             "exp": np.exp, "log": np.log10, "ln": np.log,
+                             "pi": np.pi, "e": np.e, "sqrt": np.sqrt,
+                             "W": lambda x: float(lambertw(x, 0).real),
+                             "loga": lambda a, b: np.log(b) / np.log(a)}))
         except Exception as e:
             return f"Error: {str(e)}"
 
     def calculate_derivative(self, expression: str, variable: str = 'x') -> str:
         """Calculates the derivative of an expression."""
         try:
-            # Replace scientific notation and functions
-            expression = expression.replace("e", str(math.e))
-            expression = expression.replace("log(", "log10(")
-            expr = sp.parse_expr(expression)
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
+            parsed_expr = sp.parse_expr(expr)
             var = sp.Symbol(variable)
-            derivative = sp.diff(expr, var)
-            return str(derivative)
+            derivative = sp.diff(parsed_expr, var)
+            # Convert back to ^ notation for display
+            return str(derivative).replace('**', '^')
         except Exception as e:
             return f"Error: {str(e)}"
 
     def calculate_integral(self, expression: str, variable: str = 'x') -> str:
         """Calculates the indefinite integral of an expression."""
         try:
-            # Replace scientific notation and functions
-            expression = expression.replace("e", str(math.e))
-            expression = expression.replace("log(", "log10(")
-            expr = sp.parse_expr(expression)
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
+            parsed_expr = sp.parse_expr(expr)
             var = sp.Symbol(variable)
-            integral = sp.integrate(expr, var)
-            return str(integral)
+            integral = sp.integrate(parsed_expr, var)
+            # Convert back to ^ notation for display
+            return str(integral).replace('**', '^')
         except Exception as e:
             return f"Error: {str(e)}"
 
     def definite_integral(self, expression: str, lower: float, upper: float, variable: str = 'x') -> float:
         """Calculates the definite integral of an expression between limits."""
         try:
-            # Replace scientific notation and functions
-            expression = expression.replace("e", str(math.e))
-            expression = expression.replace("log(", "log10(")
-            expr = sp.parse_expr(expression)
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
+            parsed_expr = sp.parse_expr(expr)
             var = sp.Symbol(variable)
-            integral = sp.integrate(expr, (var, lower, upper))
+            integral = sp.integrate(parsed_expr, (var, lower, upper))
             return float(integral.evalf())
         except Exception as e:
             return f"Error: {str(e)}"
@@ -226,9 +214,11 @@ class CalculatorCore:
     def solve_equation(self, equation: str) -> List[complex]:
         """Solves an equation and returns all roots."""
         try:
-            # Replace scientific notation and functions
-            equation = equation.replace("e", str(math.e))
-            equation = equation.replace("log(", "log10(")
+            # Normalize the equation first
+            equation = self._normalize_expression(equation)
+            if '=' in equation:
+                left, right = equation.split('=')
+                equation = f"({left})-({right})"
             eq = sp.parse_expr(equation)
             return [complex(root) for root in sp.solve(eq)]
         except Exception as e:
@@ -237,45 +227,23 @@ class CalculatorCore:
     def evaluate_function(self, expression: str, x_val: float) -> float:
         """Evaluates a function at a specific x value."""
         try:
-            # Replace scientific notation and functions
-            expression = expression.replace("e", str(math.e))
-            expression = expression.replace("log(", "log10(")
-            expr = sp.parse_expr(expression)
-            return float(expr.subs(self.x, x_val))
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
+            parsed_expr = sp.parse_expr(expr)
+            return float(parsed_expr.subs(self.x, x_val))
         except Exception as e:
             return f"Error: {str(e)}"
 
     def generate_plot_points(self, expression: str, x_min: float = -10, x_max: float = 10, 
-                           points: int = 1000) -> Tuple[np.ndarray, np.ndarray]:
+                            points: int = 1000) -> Tuple[np.ndarray, np.ndarray]:
         """Generates points for plotting a function."""
         try:
-            # Replace scientific notation and functions
-            expression = expression.replace("e", str(math.e))
-            expression = expression.replace("log(", "log10(")
-            expression = expression.replace("W(", "lambertw(")
-            
+            # Normalize the expression first
+            expr = self._normalize_expression(expression)
             x_vals = np.linspace(x_min, x_max, points)
-            expr = sp.parse_expr(expression)
-            
-            # Convert sympy expression to numpy function for vectorized evaluation
-            f = sp.lambdify(self.x, expr, modules=['numpy', {'lambertw': lambda x: lambertw(x, 0).real}])
-            
-            try:
-                y_vals = f(x_vals)
-                # Handle infinities and NaN values
-                y_vals = np.ma.masked_invalid(y_vals)
-                return x_vals, y_vals
-            except Exception as e:
-                # If vectorized evaluation fails, fall back to point-by-point evaluation
-                y_vals = []
-                for x_val in x_vals:
-                    try:
-                        y = float(expr.subs(self.x, x_val))
-                        y_vals.append(y)
-                    except:
-                        y_vals.append(np.nan)
-                return x_vals, np.array(y_vals)
-                
+            parsed_expr = sp.parse_expr(expr)
+            y_vals = [float(parsed_expr.subs(self.x, x_val)) for x_val in x_vals]
+            return x_vals, np.array(y_vals)
         except Exception as e:
             return None, f"Error: {str(e)}"
 

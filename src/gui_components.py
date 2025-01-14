@@ -287,54 +287,90 @@ class GraphingCalculatorFrame(CalculatorFrame):
         
         # Add precision control at the top
         self.precision_frame = PrecisionFrame(self, calculator_core)
-        self.precision_frame.pack(fill="x", padx=10, pady=5)
+        self.precision_frame.pack(fill="x", padx=10, pady=(5,0))
         
-        # Function input
-        input_frame = ctk.CTkFrame(self)
-        input_frame.pack(fill='x', padx=5, pady=5)
+        # Mode selection with improved styling
+        mode_frame = ctk.CTkFrame(self)
+        mode_frame.pack(fill='x', padx=10, pady=5)
         
-        ctk.CTkLabel(input_frame, text="f(x) = ").pack(side='left', padx=5)
-        self.function_entry = ctk.CTkEntry(input_frame, width=300)
+        mode_label = ctk.CTkLabel(mode_frame, text="Plotting Mode:", font=("Helvetica", 12, "bold"))
+        mode_label.pack(side='left', padx=(5,10))
+        
+        self.mode_var = tk.StringVar(value="single")
+        single_mode = ctk.CTkRadioButton(mode_frame, text="Single Function", 
+                                       variable=self.mode_var, value="single",
+                                       command=self.switch_mode,
+                                       font=("Helvetica", 12))
+        single_mode.pack(side='left', padx=5)
+        
+        multi_mode = ctk.CTkRadioButton(mode_frame, text="Multiple Functions", 
+                                      variable=self.mode_var, value="multi",
+                                      command=self.switch_mode,
+                                      font=("Helvetica", 12))
+        multi_mode.pack(side='left', padx=5)
+        
+        # Show derivative checkbox with improved styling
+        self.show_derivative = tk.BooleanVar(value=True)
+        derivative_check = ctk.CTkCheckBox(mode_frame, text="Show Derivatives",
+                                         variable=self.show_derivative,
+                                         command=self.plot_function,
+                                         font=("Helvetica", 12))
+        derivative_check.pack(side='right', padx=10)
+        
+        # Function input frames with improved styling
+        self.single_input_frame = ctk.CTkFrame(self)
+        self.multi_input_frame = ctk.CTkFrame(self)
+        
+        # Single function mode
+        ctk.CTkLabel(self.single_input_frame, text="f(x) = ", 
+                    font=("Helvetica", 14, "bold")).pack(side='left', padx=5)
+        self.function_entry = ctk.CTkEntry(self.single_input_frame, width=400,
+                                         font=("Helvetica", 12))
         self.function_entry.pack(side='left', padx=5)
         
-        # Common functions dropdown
-        self.function_var = tk.StringVar()
-        functions = [
-            "Select a function...",
-            "e^(x^2)",
-            "sin(x)/x",
-            "x^5 + 2*x^3 - 3*x",
-            "sqrt(abs(x))",
-            "1/(1 + x^2)",
-            "e^((x^2+2)/sqrt(abs(x)))",
-            "sin(x)*cos(x)",
-            "tan(x)",
-            "log(abs(x))",
-            "x^2*e^(-x^2)"
-        ]
-        self.function_dropdown = ctk.CTkOptionMenu(
-            input_frame,
-            values=functions,
-            command=self.function_selected
-        )
-        self.function_dropdown.pack(side='left', padx=5)
-        self.function_dropdown.set("Select a function...")
+        # Multiple functions mode with improved styling
+        self.function_entries = []
+        colors = ['blue', 'red', 'green']
+        for i in range(3):
+            func_frame = ctk.CTkFrame(self.multi_input_frame)
+            func_frame.pack(fill='x', padx=5, pady=2)
+            
+            label = ctk.CTkLabel(func_frame, text=f"f{i+1}(x) = ",
+                               font=("Helvetica", 14, "bold"),
+                               text_color=colors[i])
+            label.pack(side='left', padx=5)
+            
+            entry = ctk.CTkEntry(func_frame, width=400,
+                               font=("Helvetica", 12))
+            entry.pack(side='left', padx=5)
+            self.function_entries.append(entry)
         
-        # Range inputs and zoom control
+        # Show single function mode by default
+        self.single_input_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Range inputs and zoom control with improved styling
         range_frame = ctk.CTkFrame(self)
-        range_frame.pack(fill='x', padx=5, pady=5)
+        range_frame.pack(fill='x', padx=10, pady=5)
         
         # Left side: Range inputs
         range_inputs = ctk.CTkFrame(range_frame)
         range_inputs.pack(side='left', padx=5)
         
-        ctk.CTkLabel(range_inputs, text="x min:").pack(side='left', padx=5)
-        self.x_min = ctk.CTkEntry(range_inputs, width=60)
+        range_label = ctk.CTkLabel(range_inputs, text="Plot Range:",
+                                 font=("Helvetica", 12, "bold"))
+        range_label.pack(side='left', padx=(5,10))
+        
+        ctk.CTkLabel(range_inputs, text="x min:", 
+                    font=("Helvetica", 12)).pack(side='left', padx=5)
+        self.x_min = ctk.CTkEntry(range_inputs, width=70,
+                                font=("Helvetica", 12))
         self.x_min.pack(side='left', padx=5)
         self.x_min.insert(0, "-10")
         
-        ctk.CTkLabel(range_inputs, text="x max:").pack(side='left', padx=5)
-        self.x_max = ctk.CTkEntry(range_inputs, width=60)
+        ctk.CTkLabel(range_inputs, text="x max:",
+                    font=("Helvetica", 12)).pack(side='left', padx=5)
+        self.x_max = ctk.CTkEntry(range_inputs, width=70,
+                                font=("Helvetica", 12))
         self.x_max.pack(side='left', padx=5)
         self.x_max.insert(0, "10")
         
@@ -344,26 +380,33 @@ class GraphingCalculatorFrame(CalculatorFrame):
         
         self.plot_button = ctk.CTkButton(button_frame, text="Plot",
                                        command=self.plot_function,
-                                       width=60, height=30)
+                                       width=80, height=32,
+                                       font=("Helvetica", 12, "bold"))
         self.plot_button.pack(side='left', padx=5)
         
         self.clear_button = ctk.CTkButton(button_frame, text="Clear",
                                         command=self.clear_plot,
-                                        width=60, height=30)
+                                        width=80, height=32,
+                                        font=("Helvetica", 12))
         self.clear_button.pack(side='left', padx=5)
         
         # Right side: Zoom control
         zoom_frame = ctk.CTkFrame(range_frame)
-        zoom_frame.pack(side='right', padx=5)
+        zoom_frame.pack(side='right', padx=10)
         
-        ctk.CTkLabel(zoom_frame, text="Zoom:").pack(side='left', padx=5)
-        self.zoom_slider = ctk.CTkSlider(zoom_frame, from_=0.1, to=10.0, 
+        zoom_label = ctk.CTkLabel(zoom_frame, text="Zoom:",
+                                font=("Helvetica", 12, "bold"))
+        zoom_label.pack(side='left', padx=5)
+        
+        self.zoom_slider = ctk.CTkSlider(zoom_frame, from_=0.1, to=10.0,
                                        number_of_steps=99,
-                                       command=self.update_zoom)
+                                       command=self.update_zoom,
+                                       width=150)
         self.zoom_slider.pack(side='left', padx=5)
-        self.zoom_slider.set(1.0)  # Default zoom level
+        self.zoom_slider.set(1.0)
         
-        self.zoom_label = ctk.CTkLabel(zoom_frame, text="1.0x")
+        self.zoom_label = ctk.CTkLabel(zoom_frame, text="1.0x",
+                                     font=("Helvetica", 12))
         self.zoom_label.pack(side='left', padx=5)
         
         # Create main container for plot and analysis
@@ -400,24 +443,109 @@ class GraphingCalculatorFrame(CalculatorFrame):
         # Initialize the plot
         self.clear_plot()
 
-    def function_selected(self, choice):
-        """Handle function selection from dropdown."""
-        if choice != "Select a function...":
-            self.function_entry.delete(0, tk.END)
-            self.function_entry.insert(0, choice)
-            self.plot_function()  # Automatically plot when function is selected
-
-    def clear_plot(self):
-        """Clear the current plot."""
-        self.plot.clear()
-        self.plot.grid(True)
-        self.plot.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-        self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
-        self.canvas.draw()
+    def switch_mode(self):
+        if self.mode_var.get() == "single":
+            self.multi_input_frame.pack_forget()
+            self.single_input_frame.pack(fill='x', padx=5, pady=5)
+        else:
+            self.single_input_frame.pack_forget()
+            self.multi_input_frame.pack(fill='x', padx=5, pady=5)
+        self.clear_plot()
+        
+    def plot_function(self):
+        try:
+            x_min = float(self.x_min.get())
+            x_max = float(self.x_max.get())
+            
+            self.plot.clear()
+            
+            if self.mode_var.get() == "single":
+                expr = self.function_entry.get()
+                self._plot_single_function(expr, x_min, x_max)
+            else:
+                self._plot_multiple_functions(x_min, x_max)
+            
+            self.plot.grid(True)
+            self.plot.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+            self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
+            self.plot.legend()
+            
+            # Store current limits for zoom control
+            self.current_xlim = self.plot.get_xlim()
+            self.current_ylim = self.plot.get_ylim()
+            
+            # Apply current zoom level
+            self.update_zoom(self.zoom_slider.get())
+            
+            self.canvas.draw()
+        except Exception as e:
+            print(f"Error plotting function: {str(e)}")
+            
+    def _plot_single_function(self, expr, x_min, x_max):
+        # Expression is normalized in calculator_core
+        x_vals, y_vals = self.calculator_core.generate_plot_points(
+            expr, x_min, x_max)
+        
+        if isinstance(y_vals, str) and y_vals.startswith("Error"):
+            raise ValueError(y_vals)
+        
+        self.plot.plot(x_vals, y_vals, label='f(x)')
+        
+        # Plot derivative if checkbox is checked
+        if self.show_derivative.get():
+            derivative = self.calculator_core.calculate_derivative(expr)
+            x_vals_d, y_vals_d = self.calculator_core.generate_plot_points(
+                derivative, x_min, x_max)
+            if not isinstance(y_vals_d, str):
+                self.plot.plot(x_vals_d, y_vals_d, '--', label="f'(x)")
+        
+        # Display expression with ^ for better readability
+        display_expr = expr.replace('**', '^')
+        self.plot.set_title(f"f(x) = {display_expr}")
+        
+        # Update analysis
+        analysis = self.analyze_function(expr, x_min, x_max)
         self.analysis_text.delete('1.0', tk.END)
-        # Reset zoom slider
-        self.zoom_slider.set(1.0)
-        self.zoom_label.configure(text="1.0x")
+        self.analysis_text.insert('1.0', analysis)
+            
+    def _plot_multiple_functions(self, x_min, x_max):
+        self.analysis_text.delete('1.0', tk.END)
+        colors = ['b', 'r', 'g']  # Different colors for each function
+        
+        for i, entry in enumerate(self.function_entries):
+            expr = entry.get().strip()
+            if not expr:  # Skip empty entries
+                continue
+            
+            try:
+                x_vals, y_vals = self.calculator_core.generate_plot_points(
+                    expr, x_min, x_max)
+                
+                if isinstance(y_vals, str) and y_vals.startswith("Error"):
+                    continue
+                
+                self.plot.plot(x_vals, y_vals, color=colors[i], label=f'f{i+1}(x)')
+                
+                # Plot derivative if checkbox is checked
+                if self.show_derivative.get():
+                    derivative = self.calculator_core.calculate_derivative(expr)
+                    x_vals_d, y_vals_d = self.calculator_core.generate_plot_points(
+                        derivative, x_min, x_max)
+                    if not isinstance(y_vals_d, str):
+                        self.plot.plot(x_vals_d, y_vals_d, '--', color=colors[i], 
+                                     label=f"f{i+1}'(x)")
+                
+                # Add analysis for this function
+                analysis = self.analyze_function(expr, x_min, x_max)
+                # Display expression with ^ for better readability
+                display_expr = expr.replace('**', '^')
+                self.analysis_text.insert(tk.END, f"\nFunction {i+1}: f(x) = {display_expr}\n{analysis}\n")
+                
+            except Exception as e:
+                print(f"Error plotting function {i+1}: {str(e)}")
+                continue
+        
+        self.plot.set_title("Multiple Functions")
 
     def update_coordinates(self, event):
         if event.inaxes:
@@ -554,89 +682,106 @@ class GraphingCalculatorFrame(CalculatorFrame):
             self.plot.set_ylim(center_y - width_y, center_y + width_y)
             self.canvas.draw()
 
-    def plot_function(self):
-        try:
-            x_min = float(self.x_min.get())
-            x_max = float(self.x_max.get())
-            expr = self.function_entry.get()
-            
-            # Replace ^ with ** if not already done
-            expr = expr.replace('^', '**')
-            
-            x_vals, y_vals = self.calculator_core.generate_plot_points(
-                expr, x_min, x_max)
-            
-            if isinstance(y_vals, str) and y_vals.startswith("Error"):
-                raise ValueError(y_vals)
-            
-            self.plot.clear()
-            self.plot.plot(x_vals, y_vals, label='f(x)')
-            
-            # Plot derivative
-            derivative = self.calculator_core.calculate_derivative(expr)
-            x_vals_d, y_vals_d = self.calculator_core.generate_plot_points(
-                derivative, x_min, x_max)
-            if not isinstance(y_vals_d, str):
-                self.plot.plot(x_vals_d, y_vals_d, '--', label="f'(x)")
-            
-            self.plot.grid(True)
-            self.plot.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-            self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
-            self.plot.set_title(f"f(x) = {expr}")
-            self.plot.legend()
-            
-            # Store current limits for zoom control
-            self.current_xlim = self.plot.get_xlim()
-            self.current_ylim = self.plot.get_ylim()
-            
-            # Apply current zoom level
-            self.update_zoom(self.zoom_slider.get())
-            
-            # Update analysis
-            analysis = self.analyze_function(expr, x_min, x_max)
-            self.analysis_text.delete('1.0', tk.END)
-            self.analysis_text.insert('1.0', analysis)
-            
-            self.canvas.draw()
-        except Exception as e:
-            print(f"Error plotting function: {str(e)}")
+    def clear_plot(self):
+        """Clear the current plot."""
+        self.plot.clear()
+        self.plot.grid(True)
+        self.plot.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+        self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
+        self.canvas.draw()
+        self.analysis_text.delete('1.0', tk.END)
+        # Reset zoom slider
+        self.zoom_slider.set(1.0)
+        self.zoom_label.configure(text="1.0x")
 
 class CalculusFrame(CalculatorFrame):
     def __init__(self, parent, calculator_core):
         super().__init__(parent, calculator_core)
         
-        # Function input
-        input_frame = ctk.CTkFrame(self)
-        input_frame.pack(fill='x', padx=5, pady=5)
+        # Add precision control at the top
+        self.precision_frame = PrecisionFrame(self, calculator_core)
+        self.precision_frame.pack(fill="x", padx=10, pady=(5,0))
         
-        ctk.CTkLabel(input_frame, text="f(x) = ").pack(side='left', padx=5)
-        self.function_entry = ctk.CTkEntry(input_frame, width=300)
+        # Function input with improved styling
+        input_frame = ctk.CTkFrame(self)
+        input_frame.pack(fill='x', padx=10, pady=5)
+        
+        input_label = ctk.CTkLabel(input_frame, text="Enter Function:",
+                                 font=("Helvetica", 12, "bold"))
+        input_label.pack(side='left', padx=(5,10))
+        
+        ctk.CTkLabel(input_frame, text="f(x) = ",
+                    font=("Helvetica", 14, "bold")).pack(side='left', padx=5)
+        self.function_entry = ctk.CTkEntry(input_frame, width=400,
+                                         font=("Helvetica", 12))
         self.function_entry.pack(side='left', padx=5)
         
-        # Buttons frame
+        # Buttons frame with improved styling
         buttons_frame = ctk.CTkFrame(self)
-        buttons_frame.pack(fill='x', padx=5, pady=5)
+        buttons_frame.pack(fill='x', padx=10, pady=5)
         
-        self.derivative_btn = ctk.CTkButton(buttons_frame, text="Calculate Derivative",
+        # Left side: Operation buttons
+        operations_frame = ctk.CTkFrame(buttons_frame)
+        operations_frame.pack(side='left', padx=5)
+        
+        self.derivative_btn = ctk.CTkButton(operations_frame, 
+                                          text="Calculate Derivative",
                                           command=self.calculate_derivative,
-                                          width=150, height=30)
+                                          width=180, height=32,
+                                          font=("Helvetica", 12, "bold"))
         self.derivative_btn.pack(side='left', padx=5)
         
-        self.integral_btn = ctk.CTkButton(buttons_frame, text="Calculate Integral",
+        self.integral_btn = ctk.CTkButton(operations_frame,
+                                        text="Calculate Integral",
                                         command=self.calculate_integral,
-                                        width=150, height=30)
+                                        width=180, height=32,
+                                        font=("Helvetica", 12, "bold"))
         self.integral_btn.pack(side='left', padx=5)
         
-        # Result display
-        self.result_text = ctk.CTkTextbox(self, height=200)
-        self.result_text.pack(fill='both', expand=True, padx=5, pady=5)
+        # Right side: Definite integral inputs
+        definite_frame = ctk.CTkFrame(buttons_frame)
+        definite_frame.pack(side='right', padx=5)
+        
+        def_int_label = ctk.CTkLabel(definite_frame, text="Definite Integral:",
+                                   font=("Helvetica", 12, "bold"))
+        def_int_label.pack(side='left', padx=(5,10))
+        
+        ctk.CTkLabel(definite_frame, text="from:",
+                    font=("Helvetica", 12)).pack(side='left', padx=5)
+        self.lower_bound = ctk.CTkEntry(definite_frame, width=70,
+                                      font=("Helvetica", 12))
+        self.lower_bound.pack(side='left', padx=5)
+        
+        ctk.CTkLabel(definite_frame, text="to:",
+                    font=("Helvetica", 12)).pack(side='left', padx=5)
+        self.upper_bound = ctk.CTkEntry(definite_frame, width=70,
+                                      font=("Helvetica", 12))
+        self.upper_bound.pack(side='left', padx=5)
+        
+        self.def_integral_btn = ctk.CTkButton(definite_frame,
+                                            text="Calculate",
+                                            command=self.calculate_definite_integral,
+                                            width=100, height=32,
+                                            font=("Helvetica", 12))
+        self.def_integral_btn.pack(side='left', padx=5)
+        
+        # Result display with improved styling
+        result_label = ctk.CTkLabel(self, text="Result:",
+                                  font=("Helvetica", 12, "bold"))
+        result_label.pack(anchor='w', padx=15, pady=(5,0))
+        
+        self.result_text = ctk.CTkTextbox(self, height=300,
+                                        font=("Helvetica", 12))
+        self.result_text.pack(fill='both', expand=True, padx=10, pady=5)
 
     def calculate_derivative(self):
         try:
             expr = self.function_entry.get()
             result = self.calculator_core.calculate_derivative(expr)
             self.result_text.delete('1.0', tk.END)
-            self.result_text.insert('1.0', f"Derivative of {expr}:\n{result}")
+            # Display expression with ^ for better readability
+            display_expr = expr.replace('**', '^')
+            self.result_text.insert('1.0', f"Derivative of f(x) = {display_expr}:\n\nf'(x) = {result}")
         except Exception as e:
             self.result_text.delete('1.0', tk.END)
             self.result_text.insert('1.0', f"Error: {str(e)}")
@@ -646,7 +791,26 @@ class CalculusFrame(CalculatorFrame):
             expr = self.function_entry.get()
             result = self.calculator_core.calculate_integral(expr)
             self.result_text.delete('1.0', tk.END)
-            self.result_text.insert('1.0', f"Integral of {expr}:\n{result}")
+            # Display expression with ^ for better readability
+            display_expr = expr.replace('**', '^')
+            self.result_text.insert('1.0', f"Indefinite integral of f(x) = {display_expr}:\n\n∫f(x)dx = {result} + C")
+        except Exception as e:
+            self.result_text.delete('1.0', tk.END)
+            self.result_text.insert('1.0', f"Error: {str(e)}")
+            
+    def calculate_definite_integral(self):
+        try:
+            expr = self.function_entry.get()
+            lower = float(self.lower_bound.get())
+            upper = float(self.upper_bound.get())
+            result = self.calculator_core.definite_integral(expr, lower, upper)
+            self.result_text.delete('1.0', tk.END)
+            # Display expression with ^ for better readability
+            display_expr = expr.replace('**', '^')
+            self.result_text.insert('1.0', 
+                f"Definite integral of f(x) = {display_expr}\n"
+                f"from x = {lower} to x = {upper}:\n\n"
+                f"∫({display_expr})dx = {result}")
         except Exception as e:
             self.result_text.delete('1.0', tk.END)
             self.result_text.insert('1.0', f"Error: {str(e)}")
@@ -754,88 +918,21 @@ class EquationSolverFrame(CalculatorFrame):
     def solve_equation(self):
         try:
             equation = self.equation_entry.get()
-            self.solution_text.delete('1.0', tk.END)
+            solutions = self.calculator_core.solve_equation(equation)
             
-            # Check if it's a system of equations
-            if ',' in equation:
-                self.solve_system(equation)
-                return
+            self.result_text.delete('1.0', tk.END)
+            # Display equation with ^ for better readability
+            display_eq = equation.replace('**', '^')
+            self.result_text.insert('1.0', f"Equation: {display_eq}\n\nSolutions:\n")
             
-            # Pre-process the equation
-            equation = equation.replace('^', '**')
-            
-            # Standardize equation format
-            if '=' in equation:
-                left, right = equation.split('=')
-                equation = f"{left}-({right})"
-            
-            # Parse with implicit multiplication
-            transformations = standard_transformations + (implicit_multiplication_application,)
-            expr = parse_expr(equation, transformations=transformations)
-            
-            # Show original equation
-            if '=' not in self.equation_entry.get():
-                self.solution_text.insert('1.0', f"Equation: {equation} = 0\n\n")
+            if isinstance(solutions, str):
+                self.result_text.insert(tk.END, solutions)
             else:
-                self.solution_text.insert('1.0', f"Equation: {self.equation_entry.get()}\n\n")
-            
-            # Solve
-            solution = solve(expr, 'x')
-            
-            # Display solutions
-            self.solution_text.insert(tk.END, "Solutions:\n")
-            if not solution:
-                self.solution_text.insert(tk.END, "No solution exists\n")
-            else:
-                for i, sol in enumerate(solution, 1):
-                    self.solution_text.insert(tk.END, f"x{i} = {sol}\n")
-            
-            # Verify solutions
-            self.solution_text.insert(tk.END, "\nVerification:\n")
-            for sol in solution:
-                try:
-                    verification = expr.subs('x', sol).evalf()
-                    if abs(float(verification)) < 1e-10:
-                        self.solution_text.insert(tk.END, f"x = {sol} ✓\n")
-                except:
-                    pass
-            
+                for i, sol in enumerate(solutions, 1):
+                    if abs(sol.imag) < 1e-10:
+                        self.result_text.insert(tk.END, f"x{i} = {sol.real:.6g}\n")
+                    else:
+                        self.result_text.insert(tk.END, f"x{i} = {sol:.6g}\n")
         except Exception as e:
-            self.solution_text.insert('1.0', f"Error: {str(e)}\nPlease check your equation format.\n\nExample formats:\n- x**2 + 6x + 9 = 0\n- x^2 + 6x + 9 = 0\n- sin(x) = 0.5\n- log(x) = 1\n- (3/4)^(x+2) = 2")
-    
-    def solve_system(self, system):
-        try:
-            # Split into individual equations
-            equations = [eq.strip() for eq in system.split(',')]
-            
-            self.solution_text.insert('1.0', "System of Equations:\n")
-            for eq in equations:
-                self.solution_text.insert(tk.END, f"{eq}\n")
-            
-            # Parse equations
-            parsed_eqs = []
-            variables = set()
-            for eq in equations:
-                if '=' in eq:
-                    left, right = eq.split('=')
-                    eq = f"({left}) - ({right})"
-                expr = parse_expr(eq)
-                parsed_eqs.append(expr)
-                variables.update(expr.free_symbols)
-            
-            # Solve system
-            solution = solve(parsed_eqs, list(variables))
-            
-            # Display solutions
-            self.solution_text.insert(tk.END, "\nSolutions:\n")
-            if not solution:
-                self.solution_text.insert(tk.END, "No solution exists\n")
-            else:
-                if isinstance(solution, dict):
-                    for var, val in solution.items():
-                        self.solution_text.insert(tk.END, f"{var} = {val}\n")
-                else:
-                    self.solution_text.insert(tk.END, str(solution))
-            
-        except Exception as e:
-            self.solution_text.insert('1.0', f"Error: {str(e)}\n") 
+            self.result_text.delete('1.0', tk.END)
+            self.result_text.insert('1.0', f"Error: {str(e)}") 
