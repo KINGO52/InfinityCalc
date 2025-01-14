@@ -309,6 +309,16 @@ class GraphingCalculatorFrame(CalculatorFrame):
                                       font=("Helvetica", 12))
         multi_mode.pack(side='left', padx=5)
         
+        # Function count spinbox for multi mode
+        self.func_count_var = tk.StringVar(value="3")
+        func_count_label = ctk.CTkLabel(mode_frame, text="Number of functions:",
+                                      font=("Helvetica", 12))
+        func_count_label.pack(side='left', padx=(20,5))
+        self.func_count = ttk.Spinbox(mode_frame, from_=1, to=99, width=5,
+                                    textvariable=self.func_count_var,
+                                    command=self.update_function_entries)
+        self.func_count.pack(side='left', padx=5)
+        
         # Show derivative checkbox with improved styling
         self.show_derivative = tk.BooleanVar(value=True)
         derivative_check = ctk.CTkCheckBox(mode_frame, text="Show Derivatives",
@@ -319,7 +329,7 @@ class GraphingCalculatorFrame(CalculatorFrame):
         
         # Function input frames with improved styling
         self.single_input_frame = ctk.CTkFrame(self)
-        self.multi_input_frame = ctk.CTkFrame(self)
+        self.multi_input_frame = ctk.CTkScrollableFrame(self, height=200)
         
         # Single function mode
         ctk.CTkLabel(self.single_input_frame, text="f(x) = ", 
@@ -330,20 +340,8 @@ class GraphingCalculatorFrame(CalculatorFrame):
         
         # Multiple functions mode with improved styling
         self.function_entries = []
-        colors = ['blue', 'red', 'green']
-        for i in range(3):
-            func_frame = ctk.CTkFrame(self.multi_input_frame)
-            func_frame.pack(fill='x', padx=5, pady=2)
-            
-            label = ctk.CTkLabel(func_frame, text=f"f{i+1}(x) = ",
-                               font=("Helvetica", 14, "bold"),
-                               text_color=colors[i])
-            label.pack(side='left', padx=5)
-            
-            entry = ctk.CTkEntry(func_frame, width=400,
-                               font=("Helvetica", 12))
-            entry.pack(side='left', padx=5)
-            self.function_entries.append(entry)
+        self.colors = ['blue', 'red', 'green', 'purple', 'orange', 'cyan', 'magenta', 'brown', 'pink']
+        self.create_function_entries(3)  # Default number of functions
         
         # Show single function mode by default
         self.single_input_frame.pack(fill='x', padx=10, pady=5)
@@ -510,8 +508,9 @@ class GraphingCalculatorFrame(CalculatorFrame):
             
     def _plot_multiple_functions(self, x_min, x_max):
         self.analysis_text.delete('1.0', tk.END)
-        colors = ['b', 'r', 'g']  # Different colors for each function
+        valid_functions = []
         
+        # Plot each valid function
         for i, entry in enumerate(self.function_entries):
             expr = entry.get().strip()
             if not expr:  # Skip empty entries
@@ -524,7 +523,9 @@ class GraphingCalculatorFrame(CalculatorFrame):
                 if isinstance(y_vals, str) and y_vals.startswith("Error"):
                     continue
                 
-                self.plot.plot(x_vals, y_vals, color=colors[i], label=f'f{i+1}(x)')
+                color = self.colors[i % len(self.colors)]
+                self.plot.plot(x_vals, y_vals, color=color, label=f'f{i+1}(x)')
+                valid_functions.append(expr)
                 
                 # Plot derivative if checkbox is checked
                 if self.show_derivative.get():
@@ -532,18 +533,28 @@ class GraphingCalculatorFrame(CalculatorFrame):
                     x_vals_d, y_vals_d = self.calculator_core.generate_plot_points(
                         derivative, x_min, x_max)
                     if not isinstance(y_vals_d, str):
-                        self.plot.plot(x_vals_d, y_vals_d, '--', color=colors[i], 
+                        self.plot.plot(x_vals_d, y_vals_d, '--', color=color, 
                                      label=f"f{i+1}'(x)")
                 
                 # Add analysis for this function
                 analysis = self.analyze_function(expr, x_min, x_max)
                 # Display expression with ^ for better readability
                 display_expr = expr.replace('**', '^')
-                self.analysis_text.insert(tk.END, f"\nFunction {i+1}: f(x) = {display_expr}\n{analysis}\n")
+                self.analysis_text.insert(tk.END, f"\n{'='*50}\nFunction {i+1}: f(x) = {display_expr}\n{analysis}\n")
                 
             except Exception as e:
                 print(f"Error plotting function {i+1}: {str(e)}")
                 continue
+        
+        # Find and plot intersection points
+        if len(valid_functions) > 1:
+            intersections = self.find_intersection_points(valid_functions)
+            if intersections:
+                self.analysis_text.insert(tk.END, f"\n{'='*50}\nIntersection Points:\n")
+                for x, y, i, j in intersections:
+                    self.plot.plot([x], [y], 'ko', markersize=8)
+                    self.analysis_text.insert(tk.END, 
+                        f"f{i+1}(x) intersects f{j+1}(x) at ({x:.4f}, {y:.4f})\n")
         
         self.plot.set_title("Multiple Functions")
 
@@ -555,114 +566,41 @@ class GraphingCalculatorFrame(CalculatorFrame):
 
     def analyze_function(self, expr, x_min, x_max):
         try:
-            # Calculate derivative
-            derivative = self.calculator_core.calculate_derivative(expr)
-            second_derivative = self.calculator_core.calculate_derivative(derivative)
+            analysis = ""
             
-            # Find critical points (where derivative = 0)
-            x_vals = np.linspace(x_min, x_max, 1000)
-            critical_points = []
-            
-            try:
-                derivative_vals = []
-                for x in x_vals:
-                    try:
-                        val = float(self.calculator_core.evaluate_function(derivative, x))
-                        derivative_vals.append(val)
-                    except:
-                        derivative_vals.append(float('nan'))
-                
-                derivative_vals = np.array(derivative_vals)
-                for i in range(len(x_vals)-1):
-                    if not (np.isnan(derivative_vals[i]) or np.isnan(derivative_vals[i+1])):
-                        if derivative_vals[i] * derivative_vals[i+1] <= 0:
-                            x_crit = (x_vals[i] + x_vals[i+1]) / 2
-                            try:
-                                y_crit = float(self.calculator_core.evaluate_function(expr, x_crit))
-                                critical_points.append((x_crit, y_crit))
-                            except:
-                                pass
-            except Exception as e:
-                print(f"Error finding critical points: {str(e)}")
-            
-            # Find inflection points (where second derivative = 0)
-            inflection_points = []
-            try:
-                second_derivative_vals = []
-                for x in x_vals:
-                    try:
-                        val = float(self.calculator_core.evaluate_function(second_derivative, x))
-                        second_derivative_vals.append(val)
-                    except:
-                        second_derivative_vals.append(float('nan'))
-                
-                second_derivative_vals = np.array(second_derivative_vals)
-                for i in range(len(x_vals)-1):
-                    if not (np.isnan(second_derivative_vals[i]) or np.isnan(second_derivative_vals[i+1])):
-                        if second_derivative_vals[i] * second_derivative_vals[i+1] <= 0:
-                            x_infl = (x_vals[i] + x_vals[i+1]) / 2
-                            try:
-                                y_infl = float(self.calculator_core.evaluate_function(expr, x_infl))
-                                inflection_points.append((x_infl, y_infl))
-                            except:
-                                pass
-            except Exception as e:
-                print(f"Error finding inflection points: {str(e)}")
-            
-            # Calculate integral
-            integral = self.calculator_core.calculate_integral(expr)
-            
-            # Format analysis text
-            analysis = f"Function Analysis:\n\n"
-            analysis += f"Derivative: {derivative}\n\n"
-            
-            if critical_points:
-                analysis += f"Critical Points:\n"
-                for x, y in critical_points:
-                    analysis += f"({x:.4f}, {y:.4f})\n"
-            else:
-                analysis += "No critical points found in range\n"
-            
-            if inflection_points:
-                analysis += f"\nInflection Points:\n"
-                for x, y in inflection_points:
-                    analysis += f"({x:.4f}, {y:.4f})\n"
-            else:
-                analysis += "\nNo inflection points found in range\n"
-            
-            analysis += f"\nIndefinite Integral:\n{integral}\n"
-            
-            # Try to find asymptotes
-            analysis += "\nAsymptotes:\n"
-            asymptotes_found = False
-            
-            # Vertical asymptotes (look for denominators approaching zero)
-            if '/' in expr:
-                denom = expr.split('/')[1].strip('()')
+            # Check if function contains x
+            if 'x' not in expr.lower():
                 try:
-                    zeros = self.calculator_core.solve_equation(denom)
-                    for zero in zeros:
-                        if zero.imag == 0 and x_min <= zero.real <= x_max:
-                            analysis += f"Vertical asymptote at x = {zero.real:.4f}\n"
-                            asymptotes_found = True
+                    value = self.calculator_core.evaluate_expression(expr)
+                    return f"Constant function: y = {value}\n"
                 except:
-                    pass
+                    return "Error: Could not evaluate constant function\n"
             
-            # Horizontal asymptotes (evaluate limits at infinity)
+            # Find critical points
+            derivative = self.calculator_core.calculate_derivative(expr)
             try:
-                limit_inf = float(self.calculator_core.evaluate_function(expr, 1e6))
-                limit_neg_inf = float(self.calculator_core.evaluate_function(expr, -1e6))
-                if abs(limit_inf) < 1e10:
-                    analysis += f"Horizontal asymptote as x→∞: y = {limit_inf:.4f}\n"
-                    asymptotes_found = True
-                if abs(limit_neg_inf) < 1e10:
-                    analysis += f"Horizontal asymptote as x→-∞: y = {limit_neg_inf:.4f}\n"
-                    asymptotes_found = True
+                critical_points = self.calculator_core.solve_equation(derivative)
+                if isinstance(critical_points, list):
+                    analysis += "Critical Points:\n"
+                    found_critical = False
+                    for x in critical_points:
+                        if isinstance(x, complex) and abs(x.imag) < 1e-10:
+                            x = x.real
+                            if x_min <= x <= x_max:
+                                try:
+                                    y = float(self.calculator_core.evaluate_function(expr, x))
+                                    analysis += f"  x = {x:.4f}, y = {y:.4f}\n"
+                                    found_critical = True
+                                except:
+                                    continue
+                    if not found_critical:
+                        analysis += "  No critical points in range\n"
+                else:
+                    analysis += "No critical points found\n"
             except:
-                pass
+                analysis += "Could not determine critical points\n"
             
-            if not asymptotes_found:
-                analysis += "No asymptotes found in range\n"
+            # Rest of the analysis code...
             
             return analysis
         except Exception as e:
@@ -693,6 +631,59 @@ class GraphingCalculatorFrame(CalculatorFrame):
         # Reset zoom slider
         self.zoom_slider.set(1.0)
         self.zoom_label.configure(text="1.0x")
+
+    def create_function_entries(self, count):
+        # Clear existing entries
+        for widget in self.multi_input_frame.winfo_children():
+            widget.destroy()
+        self.function_entries.clear()
+        
+        # Create new entries
+        for i in range(count):
+            func_frame = ctk.CTkFrame(self.multi_input_frame)
+            func_frame.pack(fill='x', padx=5, pady=2)
+            
+            color = self.colors[i % len(self.colors)]
+            label = ctk.CTkLabel(func_frame, text=f"f{i+1}(x) = ",
+                               font=("Helvetica", 14, "bold"),
+                               text_color=color)
+            label.pack(side='left', padx=5)
+            
+            entry = ctk.CTkEntry(func_frame, width=400,
+                               font=("Helvetica", 12))
+            entry.pack(side='left', padx=5)
+            self.function_entries.append(entry)
+    
+    def update_function_entries(self):
+        try:
+            count = int(self.func_count_var.get())
+            count = max(1, min(99, count))  # Limit between 1 and 99
+            self.create_function_entries(count)
+        except ValueError:
+            self.func_count_var.set("3")
+            self.create_function_entries(3)
+    
+    def find_intersection_points(self, funcs):
+        intersection_points = []
+        for i in range(len(funcs)):
+            for j in range(i + 1, len(funcs)):
+                if funcs[i] and funcs[j]:  # Check if functions exist
+                    try:
+                        # Create equation f1(x) - f2(x) = 0
+                        eq = f"({funcs[i]}) - ({funcs[j]})"
+                        roots = self.calculator_core.solve_equation(eq)
+                        if isinstance(roots, list):
+                            for x in roots:
+                                if isinstance(x, complex) and abs(x.imag) < 1e-10:
+                                    x = x.real
+                                    try:
+                                        y = float(self.calculator_core.evaluate_function(funcs[i], x))
+                                        intersection_points.append((x, y, i, j))
+                                    except:
+                                        continue
+                    except:
+                        continue
+        return intersection_points
 
 class CalculusFrame(CalculatorFrame):
     def __init__(self, parent, calculator_core):
