@@ -285,6 +285,12 @@ class GraphingCalculatorFrame(CalculatorFrame):
     def __init__(self, parent, calculator_core):
         super().__init__(parent, calculator_core)
         
+        # Add function visibility tracking
+        self.visible_functions = {}
+        self.intersection_points = []
+        self.show_intersections = tk.BooleanVar(value=False)
+        self.active_function = tk.IntVar(value=0)  # Initialize with default value
+        
         # Add precision control at the top
         self.precision_frame = PrecisionFrame(self, calculator_core)
         self.precision_frame.pack(fill="x", padx=10, pady=(5,0))
@@ -407,6 +413,13 @@ class GraphingCalculatorFrame(CalculatorFrame):
                                      font=("Helvetica", 12))
         self.zoom_label.pack(side='left', padx=5)
         
+        # Add intersection points toggle
+        intersection_check = ctk.CTkCheckBox(mode_frame, text="Show Intersection Points",
+                                          variable=self.show_intersections,
+                                          command=self.toggle_intersection_points,
+                                          font=("Helvetica", 12))
+        intersection_check.pack(side='right', padx=10)
+        
         # Create main container for plot and analysis
         self.main_container = ctk.CTkFrame(self)
         self.main_container.pack(fill='both', expand=True, padx=5, pady=5)
@@ -509,9 +522,13 @@ class GraphingCalculatorFrame(CalculatorFrame):
     def _plot_multiple_functions(self, x_min, x_max):
         self.analysis_text.delete('1.0', tk.END)
         valid_functions = []
+        self.intersection_points = []
         
-        # Plot each valid function
+        # Plot each valid and visible function
         for i, entry in enumerate(self.function_entries):
+            if not self.visible_functions[i].get():  # Skip if not visible
+                continue
+                    
             expr = entry.get().strip()
             if not expr:  # Skip empty entries
                 continue
@@ -525,7 +542,7 @@ class GraphingCalculatorFrame(CalculatorFrame):
                 
                 color = self.colors[i % len(self.colors)]
                 self.plot.plot(x_vals, y_vals, color=color, label=f'f{i+1}(x)')
-                valid_functions.append(expr)
+                valid_functions.append((expr, i))
                 
                 # Plot derivative if checkbox is checked
                 if self.show_derivative.get():
@@ -546,21 +563,39 @@ class GraphingCalculatorFrame(CalculatorFrame):
                 print(f"Error plotting function {i+1}: {str(e)}")
                 continue
         
-        # Find and plot intersection points
+        # Find and store intersection points
         if len(valid_functions) > 1:
-            intersections = self.find_intersection_points(valid_functions)
-            if intersections:
-                self.analysis_text.insert(tk.END, f"\n{'='*50}\nIntersection Points:\n")
-                for x, y, i, j in intersections:
-                    self.plot.plot([x], [y], 'ko', markersize=8)
-                    self.analysis_text.insert(tk.END, 
-                        f"f{i+1}(x) intersects f{j+1}(x) at ({x:.4f}, {y:.4f})\n")
+            self.intersection_points = self.find_intersection_points(
+                [f[0] for f in valid_functions])
+            if self.intersection_points and self.show_intersections.get():
+                self.toggle_intersection_points()
         
         self.plot.set_title("Multiple Functions")
+        self.canvas.draw()
 
     def update_coordinates(self, event):
         if event.inaxes:
-            self.coord_label.configure(text=f'x: {event.xdata:.4f}, y: {event.ydata:.4f}')
+            if self.active_function is not None:
+                # Get active function index and expression
+                idx = self.active_function.get()
+                if idx < len(self.function_entries):
+                    expr = self.function_entries[idx].get().strip()
+                    if expr:
+                        try:
+                            # Find nearest point on function
+                            x = event.xdata
+                            y = float(self.calculator_core.evaluate_function(expr, x))
+                            self.coord_label.configure(
+                                text=f'x: {x:.4f}, y: {y:.4f} (f{idx+1})')
+                            return
+                        except:
+                            pass
+                
+                # Default coordinate display
+                self.coord_label.configure(
+                    text=f'x: {event.xdata:.4f}, y: {event.ydata:.4f}')
+            else:
+                self.coord_label.configure(text="")
         else:
             self.coord_label.configure(text="")
 
@@ -576,12 +611,33 @@ class GraphingCalculatorFrame(CalculatorFrame):
                 except:
                     return "Error: Could not evaluate constant function\n"
             
-            # Find critical points
+            # Find zeros (roots)
+            try:
+                zeros = self.calculator_core.solve_equation(expr)
+                if isinstance(zeros, list):
+                    analysis += "Zeros (f(x) = 0):\n"
+                    found_zeros = False
+                    for x in zeros:
+                        if isinstance(x, complex) and abs(x.imag) < 1e-10:
+                            x = x.real
+                            if x_min <= x <= x_max:
+                                analysis += f"  x = {x:.4f}\n"
+                                found_zeros = True
+                    if not found_zeros:
+                        analysis += "  No zeros in range\n"
+                else:
+                    analysis += "No zeros found\n"
+            except:
+                analysis += "Could not determine zeros\n"
+            
+            analysis += "\n"
+            
+            # Find critical points (f'(x) = 0)
             derivative = self.calculator_core.calculate_derivative(expr)
             try:
                 critical_points = self.calculator_core.solve_equation(derivative)
                 if isinstance(critical_points, list):
-                    analysis += "Critical Points:\n"
+                    analysis += "Critical Points (f'(x) = 0):\n"
                     found_critical = False
                     for x in critical_points:
                         if isinstance(x, complex) and abs(x.imag) < 1e-10:
@@ -600,7 +656,89 @@ class GraphingCalculatorFrame(CalculatorFrame):
             except:
                 analysis += "Could not determine critical points\n"
             
-            # Rest of the analysis code...
+            analysis += "\n"
+            
+            # Find inflection points (f''(x) = 0)
+            try:
+                second_derivative = self.calculator_core.calculate_derivative(derivative)
+                inflection_points = self.calculator_core.solve_equation(second_derivative)
+                if isinstance(inflection_points, list):
+                    analysis += "Inflection Points (f''(x) = 0):\n"
+                    found_inflection = False
+                    for x in inflection_points:
+                        if isinstance(x, complex) and abs(x.imag) < 1e-10:
+                            x = x.real
+                            if x_min <= x <= x_max:
+                                try:
+                                    y = float(self.calculator_core.evaluate_function(expr, x))
+                                    analysis += f"  x = {x:.4f}, y = {y:.4f}\n"
+                                    found_inflection = True
+                                except:
+                                    continue
+                    if not found_inflection:
+                        analysis += "  No inflection points in range\n"
+                else:
+                    analysis += "No inflection points found\n"
+            except:
+                analysis += "Could not determine inflection points\n"
+            
+            analysis += "\n"
+            
+            # Find vertical asymptotes
+            try:
+                analysis += "Vertical Asymptotes:\n"
+                has_vertical = False
+                
+                # Check for rational functions
+                if '/' in expr:
+                    denominator = expr.split('/')[-1].strip()
+                    if denominator.startswith('(') and denominator.endswith(')'):
+                        denominator = denominator[1:-1]
+                    asymptotes = self.calculator_core.solve_equation(denominator)
+                    if isinstance(asymptotes, list) and asymptotes:
+                        for x in asymptotes:
+                            if isinstance(x, complex) and abs(x.imag) < 1e-10:
+                                x = x.real
+                                if x_min <= x <= x_max:
+                                    analysis += f"  x = {x:.4f}\n"
+                                    has_vertical = True
+                
+                if not has_vertical:
+                    analysis += "  None found in the given range\n"
+            except:
+                analysis += "  Could not determine vertical asymptotes\n"
+            
+            analysis += "\n"
+            
+            # Find horizontal asymptotes
+            try:
+                analysis += "Horizontal Asymptotes:\n"
+                has_horizontal = False
+                
+                # Check limit as x approaches infinity
+                x_large = 1e6
+                try:
+                    y_pos = float(self.calculator_core.evaluate_function(expr, x_large))
+                    y_neg = float(self.calculator_core.evaluate_function(expr, -x_large))
+                    
+                    if abs(y_pos - y_neg) < 1e-6:  # Same limit in both directions
+                        if abs(y_pos) < 1e10:  # Finite limit
+                            analysis += f"  y = {y_pos:.4f}\n"
+                            has_horizontal = True
+                    else:  # Different limits
+                        if abs(y_pos) < 1e10:
+                            analysis += f"  y = {y_pos:.4f} as x → +∞\n"
+                            has_horizontal = True
+                        if abs(y_neg) < 1e10:
+                            analysis += f"  y = {y_neg:.4f} as x → -∞\n"
+                            has_horizontal = True
+                except:
+                    pass
+                
+                if not has_horizontal:
+                    analysis += "  None found\n"
+            except:
+                analysis += "  Could not determine horizontal asymptotes\n"
             
             return analysis
         except Exception as e:
@@ -637,22 +775,45 @@ class GraphingCalculatorFrame(CalculatorFrame):
         for widget in self.multi_input_frame.winfo_children():
             widget.destroy()
         self.function_entries.clear()
+        self.visible_functions.clear()
         
         # Create new entries
         for i in range(count):
-            func_frame = ctk.CTkFrame(self.multi_input_frame)
-            func_frame.pack(fill='x', padx=5, pady=2)
-            
             color = self.colors[i % len(self.colors)]
-            label = ctk.CTkLabel(func_frame, text=f"f{i+1}(x) = ",
-                               font=("Helvetica", 14, "bold"),
-                               text_color=color)
-            label.pack(side='left', padx=5)
-            
-            entry = ctk.CTkEntry(func_frame, width=400,
-                               font=("Helvetica", 12))
-            entry.pack(side='left', padx=5)
+            entry = self.create_function_entry(self.multi_input_frame, i, color)
             self.function_entries.append(entry)
+        
+        # Set first function as active by default
+        if count > 0:
+            self.active_function.set(0)
+    
+    def create_function_entry(self, parent, i, color):
+        func_frame = ctk.CTkFrame(parent)
+        func_frame.pack(fill='x', padx=5, pady=2)
+        
+        # Add visibility toggle
+        visible_var = tk.BooleanVar(value=True)
+        toggle = ctk.CTkCheckBox(func_frame, text="", variable=visible_var,
+                               command=lambda: self.toggle_function(i),
+                               width=20, height=20)
+        toggle.pack(side='left', padx=2)
+        self.visible_functions[i] = visible_var
+        
+        # Add radio button for function selection
+        select_btn = ctk.CTkRadioButton(func_frame, text="",
+                                      variable=self.active_function,
+                                      value=i, width=20, height=20)
+        select_btn.pack(side='left', padx=2)
+        
+        label = ctk.CTkLabel(func_frame, text=f"f{i+1}(x) = ",
+                           font=("Helvetica", 14, "bold"),
+                           text_color=color)
+        label.pack(side='left', padx=5)
+        
+        entry = ctk.CTkEntry(func_frame, width=400,
+                           font=("Helvetica", 12))
+        entry.pack(side='left', padx=5)
+        return entry
     
     def update_function_entries(self):
         try:
@@ -684,6 +845,21 @@ class GraphingCalculatorFrame(CalculatorFrame):
                     except:
                         continue
         return intersection_points
+
+    def toggle_intersection_points(self):
+        if self.show_intersections.get():
+            # Show intersection point coordinates on plot
+            for x, y, i, j in self.intersection_points:
+                self.plot.annotate(f'({x:.2f}, {y:.2f})',
+                                 xy=(x, y), xytext=(10, 10),
+                                 textcoords='offset points',
+                                 bbox=dict(boxstyle='round,pad=0.5',
+                                         fc='yellow', alpha=0.5),
+                                 arrowprops=dict(arrowstyle='->'))
+        self.canvas.draw()
+    
+    def toggle_function(self, index):
+        self.plot_function()  # Redraw with updated visibility
 
 class CalculusFrame(CalculatorFrame):
     def __init__(self, parent, calculator_core):
