@@ -123,7 +123,7 @@ class CalculatorCore:
             return f"Error: {str(e)}"
 
     def format_large_number(self, num: Union[float, mp.mpf]) -> str:
-        """Optimized number formatting."""
+        """Optimized number formatting with special handling for tetration results."""
         try:
             if isinstance(num, float) and math.isinf(num):
                 return "Infinity" if num > 0 else "-Infinity"
@@ -135,7 +135,12 @@ class CalculatorCore:
                 if abs_num > 1e10:
                     exp = int(math.log10(abs_num))
                     if exp > 1e6:
-                        return f"10↑↑{int(math.log10(exp))}"
+                        # For extremely large numbers from tetration
+                        log_exp = math.log10(exp)
+                        if log_exp > 100:
+                            return f"10↑↑{int(log_exp)}"
+                        mantissa = num / (10 ** exp)
+                        return f"{mantissa:.2f}e{exp}"
                     mantissa = num / (10 ** exp)
                     return f"{mantissa:.6f}e{exp}"
                 return f"{num:.10g}".rstrip('0').rstrip('.')
@@ -147,16 +152,73 @@ class CalculatorCore:
             return str(num)
 
     def _normalize_expression(self, expr: str) -> str:
-        """Normalize the expression by converting ^ to ** and handling other syntax."""
+        """Normalize the expression by converting operators and handling special cases."""
+        # Handle tetration first (must be done before ^ replacement)
+        if "↑↑" in expr:
+            parts = expr.split("↑↑")
+            if len(parts) != 2:
+                raise ValueError("Invalid tetration format")
+            base = float(self.evaluate_expression(parts[0]))
+            height = int(float(self.evaluate_expression(parts[1])))
+            return str(self._compute_tetration(base, height))
+        
         # Replace ^ with ** for exponentiation
         expr = expr.replace('^', '**')
         return expr
+
+    def _compute_tetration(self, base: float, height: int) -> float:
+        """Compute tetration (a↑↑n) with dynamic precision based on size."""
+        if height < 0:
+            raise ValueError("Tetration height must be non-negative")
+        if height == 0:
+            return 1
+        if height == 1:
+            return base
+        
+        # Use logarithms for large numbers to prevent overflow
+        try:
+            result = base
+            for i in range(height - 1):
+                if result > 1e10:
+                    # Switch to logarithmic calculation for very large numbers
+                    log_result = math.log(result)
+                    result = math.exp(log_result * base)
+                    
+                    # If the result is too large, return an approximation
+                    if result > 1e100:
+                        # Calculate number of digits in the result
+                        digits = int(log_result * base / math.log(10))
+                        if digits > 1e6:
+                            return float('inf')
+                        # Return approximation in scientific notation
+                        mantissa = base * math.log10(math.e) % 1
+                        return float(f"{math.pow(10, mantissa):.2f}e{digits}")
+                else:
+                    result = pow(base, result)
+            return result
+        except OverflowError:
+            # If overflow occurs, try logarithmic calculation
+            try:
+                log_result = math.log(result)
+                digits = int(log_result * base / math.log(10))
+                if digits > 1e6:
+                    return float('inf')
+                mantissa = base * math.log10(math.e) % 1
+                return float(f"{math.pow(10, mantissa):.2f}e{digits}")
+            except:
+                return float('inf')
 
     def evaluate_expression(self, expression: str) -> float:
         """Evaluates a mathematical expression."""
         try:
             # Normalize the expression first
             expr = self._normalize_expression(expression)
+            # Handle special cases
+            if expr == "inf" or expr == "Infinity":
+                return float('inf')
+            if expr == "-inf" or expr == "-Infinity":
+                return float('-inf')
+            
             return float(eval(expr, {"__builtins__": None},
                             {"sin": np.sin, "cos": np.cos, "tan": np.tan,
                              "exp": np.exp, "log": np.log10, "ln": np.log,
