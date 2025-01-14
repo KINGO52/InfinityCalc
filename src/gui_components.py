@@ -320,31 +320,51 @@ class GraphingCalculatorFrame(CalculatorFrame):
         self.function_dropdown.pack(side='left', padx=5)
         self.function_dropdown.set("Select a function...")
         
-        # Range inputs
+        # Range inputs and zoom control
         range_frame = ctk.CTkFrame(self)
         range_frame.pack(fill='x', padx=5, pady=5)
         
-        ctk.CTkLabel(range_frame, text="x min:").pack(side='left', padx=5)
-        self.x_min = ctk.CTkEntry(range_frame, width=60)
+        # Left side: Range inputs
+        range_inputs = ctk.CTkFrame(range_frame)
+        range_inputs.pack(side='left', padx=5)
+        
+        ctk.CTkLabel(range_inputs, text="x min:").pack(side='left', padx=5)
+        self.x_min = ctk.CTkEntry(range_inputs, width=60)
         self.x_min.pack(side='left', padx=5)
         self.x_min.insert(0, "-10")
         
-        ctk.CTkLabel(range_frame, text="x max:").pack(side='left', padx=5)
-        self.x_max = ctk.CTkEntry(range_frame, width=60)
+        ctk.CTkLabel(range_inputs, text="x max:").pack(side='left', padx=5)
+        self.x_max = ctk.CTkEntry(range_inputs, width=60)
         self.x_max.pack(side='left', padx=5)
         self.x_max.insert(0, "10")
         
-        # Plot button
-        self.plot_button = ctk.CTkButton(range_frame, text="Plot",
+        # Center: Plot and Clear buttons
+        button_frame = ctk.CTkFrame(range_frame)
+        button_frame.pack(side='left', padx=20)
+        
+        self.plot_button = ctk.CTkButton(button_frame, text="Plot",
                                        command=self.plot_function,
                                        width=60, height=30)
-        self.plot_button.pack(side='left', padx=20)
+        self.plot_button.pack(side='left', padx=5)
         
-        # Clear button
-        self.clear_button = ctk.CTkButton(range_frame, text="Clear",
+        self.clear_button = ctk.CTkButton(button_frame, text="Clear",
                                         command=self.clear_plot,
                                         width=60, height=30)
         self.clear_button.pack(side='left', padx=5)
+        
+        # Right side: Zoom control
+        zoom_frame = ctk.CTkFrame(range_frame)
+        zoom_frame.pack(side='right', padx=5)
+        
+        ctk.CTkLabel(zoom_frame, text="Zoom:").pack(side='left', padx=5)
+        self.zoom_slider = ctk.CTkSlider(zoom_frame, from_=0.1, to=10.0, 
+                                       number_of_steps=99,
+                                       command=self.update_zoom)
+        self.zoom_slider.pack(side='left', padx=5)
+        self.zoom_slider.set(1.0)  # Default zoom level
+        
+        self.zoom_label = ctk.CTkLabel(zoom_frame, text="1.0x")
+        self.zoom_label.pack(side='left', padx=5)
         
         # Create main container for plot and analysis
         self.main_container = ctk.CTkFrame(self)
@@ -395,6 +415,9 @@ class GraphingCalculatorFrame(CalculatorFrame):
         self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
         self.canvas.draw()
         self.analysis_text.delete('1.0', tk.END)
+        # Reset zoom slider
+        self.zoom_slider.set(1.0)
+        self.zoom_label.configure(text="1.0x")
 
     def update_coordinates(self, event):
         if event.inaxes:
@@ -517,6 +540,20 @@ class GraphingCalculatorFrame(CalculatorFrame):
         except Exception as e:
             return f"Error in analysis: {str(e)}"
 
+    def update_zoom(self, value):
+        """Update the zoom level and redraw the plot."""
+        self.zoom_label.configure(text=f"{value:.1f}x")
+        if hasattr(self, 'current_xlim') and hasattr(self, 'current_ylim'):
+            # Calculate new limits based on zoom
+            center_x = sum(self.current_xlim) / 2
+            center_y = sum(self.current_ylim) / 2
+            width_x = (self.current_xlim[1] - self.current_xlim[0]) / (2 * value)
+            width_y = (self.current_ylim[1] - self.current_ylim[0]) / (2 * value)
+            
+            self.plot.set_xlim(center_x - width_x, center_x + width_x)
+            self.plot.set_ylim(center_y - width_y, center_y + width_y)
+            self.canvas.draw()
+
     def plot_function(self):
         try:
             x_min = float(self.x_min.get())
@@ -547,6 +584,13 @@ class GraphingCalculatorFrame(CalculatorFrame):
             self.plot.axvline(x=0, color='k', linestyle='-', alpha=0.3)
             self.plot.set_title(f"f(x) = {expr}")
             self.plot.legend()
+            
+            # Store current limits for zoom control
+            self.current_xlim = self.plot.get_xlim()
+            self.current_ylim = self.plot.get_ylim()
+            
+            # Apply current zoom level
+            self.update_zoom(self.zoom_slider.get())
             
             # Update analysis
             analysis = self.analyze_function(expr, x_min, x_max)
